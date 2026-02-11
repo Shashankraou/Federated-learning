@@ -47,6 +47,8 @@ class LoggingFedProx(fl.server.strategy.FedProx):
                     metrics.get("recall", 0),
                     metrics.get("f1_score", 0),
                 ])
+            
+            print(f"Round {rnd}: Accuracy = {metrics.get('accuracy', 0):.4f}")
 
         return loss, metrics
 
@@ -56,11 +58,11 @@ strategy = LoggingFedProx(
     min_evaluate_clients=5,
     min_available_clients=5,
     evaluate_metrics_aggregation_fn=weighted_average,
-    proximal_mu=0.1,   # ⭐ KEY FEDPROX PARAMETER
+    proximal_mu=0.1,
 )
 
 fl.server.start_server(
     server_address="localhost:8080",
-    config=fl.server.ServerConfig(num_rounds=10),
+    config=fl.server.ServerConfig(num_rounds=15),  # Increased to 15
     strategy=strategy,
 )

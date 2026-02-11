@@ -13,7 +13,7 @@ model = create_model()
 (train_x, train_y), (test_x, test_y) = load_client_data(client_id)
 
 # FedProx hyperparameter
-MU = 0.1  # Proximal term coefficient (same as server)
+MU = 0.1
 
 class FedProxClient(fl.client.NumPyClient):
 
@@ -21,41 +21,46 @@ class FedProxClient(fl.client.NumPyClient):
         return model.get_weights()
 
     def fit(self, parameters, config):
-        # Store global model weights for proximal term
         global_weights = parameters
         model.set_weights(parameters)
 
         print(f"FedProx Client {client_id}: Training started")
 
-        # Custom training loop with proximal term
-        optimizer = tf.keras.optimizers.Adam()
+        # Custom training with proximal term
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
-        # Convert to TensorFlow constants for efficiency
         global_weights_tf = [tf.constant(w) for w in global_weights]
+
+        # Data augmentation
+        data_augmentation = tf.keras.Sequential([
+            tf.keras.layers.RandomFlip("horizontal"),
+            tf.keras.layers.RandomTranslation(0.1, 0.1),
+            tf.keras.layers.RandomRotation(0.1),
+        ])
 
         dataset = tf.data.Dataset.from_tensor_slices((train_x, train_y))
         dataset = dataset.shuffle(len(train_x)).batch(32)
+        dataset = dataset.map(
+            lambda x, y: (data_augmentation(x, training=True), y),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
 
-        # Training loop (2 epochs like FedAvg)
-        for epoch in range(2):
+        # Train for 3 epochs
+        for epoch in range(3):
             for x_batch, y_batch in dataset:
                 with tf.GradientTape() as tape:
-                    # Standard cross-entropy loss
                     predictions = model(x_batch, training=True)
                     ce_loss = loss_fn(y_batch, predictions)
 
-                    # Proximal term: μ/2 * ||w - w_global||²
+                    # Proximal term
                     proximal_term = 0.0
                     for w, w_global in zip(model.trainable_weights, global_weights_tf):
                         proximal_term += tf.reduce_sum(tf.square(w - w_global))
                     
                     proximal_loss = (MU / 2.0) * proximal_term
-
-                    # Total FedProx loss
                     total_loss = ce_loss + proximal_loss
 
-                # Update weights
                 gradients = tape.gradient(total_loss, model.trainable_weights)
                 optimizer.apply_gradients(zip(gradients, model.trainable_weights))
 

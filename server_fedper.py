@@ -5,9 +5,6 @@ from typing import Optional, Tuple, Dict
 
 CSV_FILE = "fedper_metrics.csv"
 
-# -------------------------------------------------
-# Create CSV file with header (once)
-# -------------------------------------------------
 if not os.path.exists(CSV_FILE):
     with open(CSV_FILE, "w", newline="") as f:
         writer = csv.writer(f)
@@ -20,9 +17,6 @@ if not os.path.exists(CSV_FILE):
             "f1_score",
         ])
 
-# -------------------------------------------------
-# Metric aggregation (weighted by client data size)
-# -------------------------------------------------
 def weighted_average(metrics):
     total = sum(num for num, _ in metrics)
     if total == 0:
@@ -35,9 +29,6 @@ def weighted_average(metrics):
         "f1_score": sum(num * m.get("f1_score", 0) for num, m in metrics) / total,
     }
 
-# -------------------------------------------------
-# Custom strategy for logging FedPer metrics
-# -------------------------------------------------
 class LoggingFedPer(fl.server.strategy.FedAvg):
     def aggregate_evaluate(
         self,
@@ -53,7 +44,6 @@ class LoggingFedPer(fl.server.strategy.FedAvg):
 
         loss, metrics = aggregated
 
-        # Safely log metrics
         with open(CSV_FILE, "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -64,12 +54,11 @@ class LoggingFedPer(fl.server.strategy.FedAvg):
                 metrics.get("recall", 0),
                 metrics.get("f1_score", 0),
             ])
+        
+        print(f"Round {rnd}: Accuracy = {metrics.get('accuracy', 0):.4f}")
 
         return loss, metrics
 
-# -------------------------------------------------
-# Strategy setup (FedPer happens client-side)
-# -------------------------------------------------
 strategy = LoggingFedPer(
     min_fit_clients=5,
     min_evaluate_clients=5,
@@ -77,11 +66,8 @@ strategy = LoggingFedPer(
     evaluate_metrics_aggregation_fn=weighted_average,
 )
 
-# -------------------------------------------------
-# Start server
-# -------------------------------------------------
 fl.server.start_server(
     server_address="localhost:8080",
-    config=fl.server.ServerConfig(num_rounds=10),
+    config=fl.server.ServerConfig(num_rounds=15),  # Increased to 15
     strategy=strategy,
 )

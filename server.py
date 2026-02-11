@@ -47,6 +47,9 @@ class LoggingFedAvg(fl.server.strategy.FedAvg):
                     metrics.get("recall", 0),
                     metrics.get("f1_score", 0),
                 ])
+            
+            # Print progress
+            print(f"Round {rnd}: Accuracy = {metrics.get('accuracy', 0):.4f}")
 
         return loss, metrics
 
@@ -60,6 +63,6 @@ strategy = LoggingFedAvg(
 
 fl.server.start_server(
     server_address="localhost:8080",
-    config=fl.server.ServerConfig(num_rounds=10),
+    config=fl.server.ServerConfig(num_rounds=15),  # Increased from 10 to 15
     strategy=strategy,
 )

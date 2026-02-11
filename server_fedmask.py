@@ -5,9 +5,6 @@ from typing import Optional, Tuple, Dict
 
 CSV_FILE = "fedmask_metrics.csv"
 
-# ------------------------------------
-# Create CSV header (once)
-# ------------------------------------
 if not os.path.exists(CSV_FILE):
     with open(CSV_FILE, "w", newline="") as f:
         writer = csv.writer(f)
@@ -20,9 +17,6 @@ if not os.path.exists(CSV_FILE):
             "f1_score",
         ])
 
-# ------------------------------------
-# Weighted metric aggregation
-# ------------------------------------
 def weighted_average(metrics):
     total = sum(num for num, _ in metrics)
     if total == 0:
@@ -35,9 +29,6 @@ def weighted_average(metrics):
         "f1_score": sum(num * m.get("f1_score", 0) for num, m in metrics) / total,
     }
 
-# ------------------------------------
-# Logging FedMask Strategy
-# ------------------------------------
 class LoggingFedMask(fl.server.strategy.FedAvg):
 
     def aggregate_evaluate(
@@ -63,12 +54,11 @@ class LoggingFedMask(fl.server.strategy.FedAvg):
                 metrics.get("recall", 0),
                 metrics.get("f1_score", 0),
             ])
+        
+        print(f"Round {rnd}: Accuracy = {metrics.get('accuracy', 0):.4f}")
 
         return loss, metrics
 
-# ------------------------------------
-# Strategy setup
-# ------------------------------------
 strategy = LoggingFedMask(
     min_fit_clients=5,
     min_evaluate_clients=5,
@@ -76,11 +66,8 @@ strategy = LoggingFedMask(
     evaluate_metrics_aggregation_fn=weighted_average,
 )
 
-# ------------------------------------
-# Start server
-# ------------------------------------
 fl.server.start_server(
     server_address="localhost:8080",
-    config=fl.server.ServerConfig(num_rounds=10),
+    config=fl.server.ServerConfig(num_rounds=15),  # Increased to 15
     strategy=strategy,
 )

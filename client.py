@@ -2,6 +2,7 @@ import flwr as fl
 import sys
 import numpy as np
 import os
+import tensorflow as tf
 from model import create_model
 from dataset import load_client_data
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
@@ -18,7 +19,27 @@ class CIFARClient(fl.client.NumPyClient):
 
     def fit(self, parameters, config):
         model.set_weights(parameters)
-        model.fit(train_x, train_y, epochs=2, batch_size=32, verbose=0)
+        
+        # Data Augmentation
+        data_augmentation = tf.keras.Sequential([
+            tf.keras.layers.RandomFlip("horizontal"),
+            tf.keras.layers.RandomTranslation(0.1, 0.1),
+            tf.keras.layers.RandomRotation(0.1),
+            tf.keras.layers.RandomZoom(0.1),
+        ])
+        
+        # Create tf.data pipeline with augmentation
+        train_ds = tf.data.Dataset.from_tensor_slices((train_x, train_y))
+        train_ds = train_ds.shuffle(len(train_x)).batch(32)
+        train_ds = train_ds.map(
+            lambda x, y: (data_augmentation(x, training=True), y),
+            num_parallel_calls=tf.data.AUTOTUNE
+        )
+        train_ds = train_ds.prefetch(tf.data.AUTOTUNE)
+        
+        # Train for more epochs (3 instead of 2)
+        model.fit(train_ds, epochs=3, verbose=0)
+        
         return model.get_weights(), len(train_x), {}
 
     def evaluate(self, parameters, config):
@@ -31,7 +52,7 @@ class CIFARClient(fl.client.NumPyClient):
         recall = recall_score(test_y, y_pred, average="macro", zero_division=0)
         f1 = f1_score(test_y, y_pred, average="macro", zero_division=0)
 
-        # Save confusion matrix ONLY at last round
+        # Save confusion matrix at last round
         if config.get("round", 0) == config.get("num_rounds", -1):
             os.makedirs("confusion_matrices", exist_ok=True)
             cm = confusion_matrix(test_y, y_pred)
